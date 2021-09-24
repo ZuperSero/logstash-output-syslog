@@ -4,7 +4,6 @@ require "logstash/namespace"
 require "date"
 require "logstash/codecs/plain"
 
-
 # Send events to a syslog server.
 #
 # You can send messages compliant with RFC3164 or RFC5424
@@ -116,7 +115,11 @@ class LogStash::Outputs::Syslog < LogStash::Outputs::Base
 
   # message text to log. The new value can include `%{foo}` strings
   # to help you build a new value from other parts of the event.
-  config :message, :validate => :string, :default => "%{message}"
+  config :message, :validate => :string, :default => ""
+  
+  # Structured data to log. The new value can include `%{foo}` strings
+  # to help you build a new value from other parts of the event.
+  config :structureddata, :validate => :string, :default => "-" #Structure data from config else "-"
 
   # message id for syslog message. The new value can include `%{foo}` strings
   # to help you build a new value from other parts of the event.
@@ -145,15 +148,16 @@ class LogStash::Outputs::Syslog < LogStash::Outputs::Base
 
   def receive(event)
     @codec.encode(event)
+
   end
 
   def publish(event, payload)
     appname = event.sprintf(@appname)
     procid = event.sprintf(@procid)
     sourcehost = event.sprintf(@sourcehost)
-
-    message = payload.to_s.rstrip.gsub(/[\r][\n]/, "\n").gsub(/[\n]/, '\n')
-
+    structureddata = event.sprintf(@structureddata) # set structured data might be redundant
+    message = event.sprintf(@message).to_s.rstrip.gsub(/[\r][\n]/, "\n").gsub(/[\n]/, '\n') # there is still garbage in payload, use message part instead.
+      
     # fallback to pri 13 (facility 1, severity 5)
     if @use_labels
       facility_code = (FACILITY_LABELS.index(event.sprintf(@facility)) || 1)
@@ -170,7 +174,8 @@ class LogStash::Outputs::Syslog < LogStash::Outputs::Base
     else
       msgid = event.sprintf(@msgid)
       timestamp = event.sprintf("%{+YYYY-MM-dd'T'HH:mm:ss.SSSZZ}")
-      syslog_msg = "<#{priority.to_s}>1 #{timestamp} #{sourcehost} #{appname} #{procid} #{msgid} - #{message}"
+      #inserted structureddata at its position
+      syslog_msg = "<#{priority.to_s}>1 #{timestamp} #{sourcehost} #{appname} #{procid} #{msgid} #{structureddata} #{message}"
     end
 
     begin
